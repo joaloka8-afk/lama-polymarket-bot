@@ -65,6 +65,14 @@ CREATE TABLE IF NOT EXISTS trade_log (
     status            TEXT    NOT NULL,
     error             TEXT
 );
+
+CREATE TABLE IF NOT EXISTS chat_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id     INTEGER NOT NULL,
+    role            TEXT    NOT NULL,
+    message         TEXT    NOT NULL,
+    created_at      TEXT    NOT NULL
+);
 """
 
 
@@ -309,3 +317,22 @@ class Database:
         )
         row = await cur.fetchone()
         return float(row[0]) if row else 0.0
+
+    # ── chat history ─────────────────────────────────────────
+
+    async def save_chat_message(self, telegram_id: int, role: str, message: str):
+        await self._db.execute(
+            "INSERT INTO chat_history (telegram_id, role, message, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (telegram_id, role, message[:2000], _now()),
+        )
+        await self._db.commit()
+
+    async def get_chat_history(self, telegram_id: int, limit: int = 20) -> list[dict]:
+        cur = await self._db.execute(
+            "SELECT role, message FROM chat_history "
+            "WHERE telegram_id = ? ORDER BY id DESC LIMIT ?",
+            (telegram_id, limit),
+        )
+        rows = await cur.fetchall()
+        return [{"role": r["role"], "message": r["message"]} for r in reversed(rows)]

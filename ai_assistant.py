@@ -6,7 +6,7 @@ import os
 import re
 
 from xai_sdk import Client
-from xai_sdk.chat import system, user
+from xai_sdk.chat import system, user, assistant
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +18,21 @@ class GrokAssistant:
         self.client = Client(api_key=api_key, timeout=60)
         self.model = "grok-4-1-fast-reasoning"
 
-    async def understand_intent(self, message: str, user_context: dict) -> dict:
+    async def understand_intent(
+        self, message: str, user_context: dict, chat_history: list[dict] | None = None
+    ) -> dict:
         """Analyze user message and extract intent + parameters.
-        
+
+        chat_history is a list of {"role": "user"|"assistant", "message": "..."}.
+
         Returns dict with:
         - intent: str (command name or "chat")
         - params: dict
         - response: str (AI response to user)
         - requires_confirmation: bool
         """
-        
-        system_prompt = f"""You are Lama. You talk like a real person - casual, direct, no fluff. You're a friend who happens to be great at Polymarket trading.
+
+        system_prompt = f"""You are Lama. You talk like a real person - casual, direct, no fluff. You're a friend who happens to be great at Polymarket trading. You remember everything the user has told you in this conversation.
 
 Rules for how you talk:
 - NEVER start with "Hey, I'm Lama" or introduce yourself unless someone literally asks who you are
@@ -39,6 +43,7 @@ Rules for how you talk:
 - Be confident and straight to the point
 - Use slang naturally but don't force it
 - If something goes wrong, be honest about it, don't sugarcoat
+- Reference things the user told you before when relevant - you have memory
 
 User context:
 - Has wallet: {user_context.get('has_wallet', False)}
@@ -75,25 +80,35 @@ If asked who you are, just say your name is Lama. Don't make it a whole speech.
 
         chat = self.client.chat.create(model=self.model)
         chat.append(system(system_prompt))
+
+        # Feed conversation history so Lama remembers past messages
+        if chat_history:
+            for msg in chat_history:
+                if msg["role"] == "user":
+                    chat.append(user(msg["message"]))
+                elif msg["role"] == "assistant":
+                    chat.append(assistant(msg["message"]))
+
+        # Current message
         chat.append(user(message))
 
         try:
             response = chat.sample()
             content = response.content.strip()
-            
+
             # Extract JSON from markdown code blocks if present
             if "```json" in content:
-                content = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
-                if content:
-                    content = content.group(1)
+                match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
+                if match:
+                    content = match.group(1)
             elif "```" in content:
-                content = re.search(r"```\s*(\{.*?\})\s*```", content, re.DOTALL)
-                if content:
-                    content = content.group(1)
-            
+                match = re.search(r"```\s*(\{.*?\})\s*```", content, re.DOTALL)
+                if match:
+                    content = match.group(1)
+
             result = json.loads(content)
             return result
-            
+
         except Exception as exc:
             logger.error("Grok intent parsing failed: %s", exc)
             return {

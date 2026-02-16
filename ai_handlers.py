@@ -64,13 +64,16 @@ async def ai_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Send typing indicator
     await update.message.chat.send_action("typing")
     
-    # Understand intent using Grok
+    # Load conversation history from database
+    chat_history = await db.get_chat_history(uid, limit=20)
+    
+    # Understand intent using Grok (with memory)
     try:
-        result = await grok.understand_intent(message_text, user_context)
+        result = await grok.understand_intent(message_text, user_context, chat_history)
     except Exception as exc:
         logger.exception("Grok intent understanding failed")
         await update.message.reply_text(
-            "🤔 I'm having trouble understanding. Could you try rephrasing?"
+            "I'm having trouble right now. Try again in a sec?"
         )
         return
     
@@ -78,6 +81,11 @@ async def ai_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     params = result.get("params", {})
     response = result.get("response", "")
     requires_confirmation = result.get("requires_confirmation", False)
+    
+    # Save user message and AI response to history
+    await db.save_chat_message(uid, "user", message_text)
+    if response:
+        await db.save_chat_message(uid, "assistant", response)
     
     # Route to appropriate handler
     if intent == "trade" and requires_confirmation:
