@@ -1,0 +1,20 @@
+app = "lama-bot"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = []
+    port = 8080
+
+[mounts]
+  source = "lama_data"
+  destination = "/app/data"

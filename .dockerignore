@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.db
+bot.log
+.env
+.venv/
+venv/
+.git/
+.gitignore
+*.md
+!README.md
+.cursor/
+terminals/
+migrate_db.py

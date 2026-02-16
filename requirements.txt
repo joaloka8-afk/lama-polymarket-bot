@@ -1,0 +1,12 @@
+python-telegram-bot>=20.0
+py-clob-client>=0.34.0
+py-builder-relayer-client
+py-builder-signing-sdk
+eth-account>=0.10.0
+eth-abi>=4.0.0
+eth-utils>=2.0.0
+cryptography>=41.0.0
+aiosqlite>=0.19.0
+httpx>=0.25.0
+python-dotenv>=1.0.0
+xai-sdk>=0.1.0

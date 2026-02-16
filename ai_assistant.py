@@ -1,0 +1,110 @@
+"""AI assistant using xAI Grok for natural language understanding and trade intent extraction."""
+
+import json
+import logging
+import os
+import re
+
+from xai_sdk import Client
+from xai_sdk.chat import system, user
+
+logger = logging.getLogger(__name__)
+
+
+class GrokAssistant:
+    """Grok-powered AI assistant that understands trading commands and user intent."""
+
+    def __init__(self, api_key: str):
+        self.client = Client(api_key=api_key, timeout=60)
+        self.model = "grok-4-1-fast-reasoning"
+
+    async def understand_intent(self, message: str, user_context: dict) -> dict:
+        """Analyze user message and extract intent + parameters.
+        
+        Returns dict with:
+        - intent: str (command name or "chat")
+        - params: dict
+        - response: str (AI response to user)
+        - requires_confirmation: bool
+        """
+        
+        system_prompt = f"""You are Lama, an intelligent AI trading assistant for Polymarket. You help users with copy-trading and algorithmic trading strategies.
+
+User context:
+- Has wallet: {user_context.get('has_wallet', False)}
+- Proxy deployed: {user_context.get('has_proxy', False)}
+- Trading enabled: {user_context.get('trading_enabled', False)}
+- Is paused: {user_context.get('is_paused', False)}
+- Following leaders: {user_context.get('leader_count', 0)}
+
+Analyze the user's message and determine their intent. Respond with JSON ONLY:
+
+{{
+  "intent": "create_wallet" | "setup_proxy" | "deposit" | "connect" | "follow" | "unfollow" | "leaders" | "pause" | "resume" | "status" | "history" | "trade" | "enable_algo" | "disable_algo" | "algo_status" | "set_strategy" | "chat",
+  "params": {{}},
+  "response": "Your helpful response to the user",
+  "requires_confirmation": true/false
+}}
+
+For "trade" intent, extract:
+- market: market description or condition ID
+- side: "BUY" or "SELL"
+- outcome: outcome to bet on
+- amount: USDC amount
+
+Examples:
+"buy 20 dollars on Yes for Trump wins" -> {{"intent": "trade", "params": {{"side": "BUY", "outcome": "Yes", "amount": 20, "market": "Trump wins"}}, "response": "I'll place a $20 buy order on Yes for Trump wins. Please confirm.", "requires_confirmation": true}}
+"show my status" -> {{"intent": "status", "params": {{}}, "response": "Let me show your account status.", "requires_confirmation": false}}
+"start following 0x123..." -> {{"intent": "follow", "params": {{"leader": "0x123..."}}, "response": "I'll add this leader to your follow list.", "requires_confirmation": false}}
+"enable algo trading" -> {{"intent": "enable_algo", "params": {{}}, "response": "I'll enable algorithmic trading for you.", "requires_confirmation": false}}
+"use momentum strategy" -> {{"intent": "set_strategy", "params": {{"strategy": "momentum"}}, "response": "I'll switch your algo strategy to momentum.", "requires_confirmation": false}}
+"what's my algo status?" -> {{"intent": "algo_status", "params": {{}}, "response": "Let me show your algo trading status.", "requires_confirmation": false}}
+
+Always introduce yourself as "Lama" when greeting users or answering "who are you?" type questions.
+"""
+
+        chat = self.client.chat.create(model=self.model)
+        chat.append(system(system_prompt))
+        chat.append(user(message))
+
+        try:
+            response = chat.sample()
+            content = response.content.strip()
+            
+            # Extract JSON from markdown code blocks if present
+            if "```json" in content:
+                content = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
+                if content:
+                    content = content.group(1)
+            elif "```" in content:
+                content = re.search(r"```\s*(\{.*?\})\s*```", content, re.DOTALL)
+                if content:
+                    content = content.group(1)
+            
+            result = json.loads(content)
+            return result
+            
+        except Exception as exc:
+            logger.error("Grok intent parsing failed: %s", exc)
+            return {
+                "intent": "chat",
+                "params": {},
+                "response": "I'm having trouble understanding. Could you try rephrasing?",
+                "requires_confirmation": False,
+            }
+
+    async def generate_trade_summary(self, trade_params: dict) -> str:
+        """Generate a human-readable trade summary for confirmation."""
+        side = trade_params.get("side", "BUY")
+        outcome = trade_params.get("outcome", "")
+        amount = trade_params.get("amount", 0)
+        market = trade_params.get("market", "unknown market")
+        
+        emoji = "📈" if side == "BUY" else "📉"
+        return (
+            f"{emoji} **Trade Confirmation**\n\n"
+            f"Market: {market}\n"
+            f"Side: {side} {outcome}\n"
+            f"Amount: ${amount:.2f}\n\n"
+            f"React with ✅ to confirm or ❌ to cancel"
+        )

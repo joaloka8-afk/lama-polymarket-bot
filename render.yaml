@@ -1,0 +1,41 @@
+services:
+  - type: worker
+    name: lama-bot
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: BUILDER_API_KEY
+        sync: false
+      - key: BUILDER_SECRET
+        sync: false
+      - key: BUILDER_PASS_PHRASE
+        sync: false
+      - key: CHAIN_ID
+        value: 137
+      - key: RELAYER_URL
+        value: https://relayer-v2.polymarket.com
+      - key: CLOB_URL
+        value: https://clob.polymarket.com
+      - key: DATA_API_URL
+        value: https://data-api.polymarket.com
+      - key: BRIDGE_URL
+        value: https://bridge.polymarket.com
+      - key: POLL_INTERVAL_SECONDS
+        value: 30
+      - key: DEFAULT_ORDER_SIZE_USDC
+        value: 10.0
+      - key: DEFAULT_MAX_SLIPPAGE
+        value: 0.02
+      - key: DEFAULT_MAX_DAILY_LOSS
+        value: 100.0
+      - key: DEFAULT_MAX_PER_MARKET
+        value: 50.0
+      - key: DEFAULT_MAX_OPEN_POSITIONS
+        value: 10
