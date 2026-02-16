@@ -10,16 +10,24 @@ import aiomysql
 logger = logging.getLogger(__name__)
 
 
-def _parse_mysql_url(url: str) -> dict:
-    """Parse MYSQL_URL into connection kwargs for aiomysql."""
-    parsed = urlparse(url)
-    return {
-        "host": parsed.hostname or "127.0.0.1",
-        "port": parsed.port or 3306,
-        "user": parsed.username or "root",
-        "password": parsed.password or "",
-        "db": parsed.path.lstrip("/") or "railway",
-    }
+def _get_mysql_config() -> dict:
+    """Build MySQL connection config from Railway env vars (auto-detect)."""
+    url = os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL") or os.getenv("MYSQL_PUBLIC_URL")
+    if url:
+        parsed = urlparse(url)
+        return {
+            "host": parsed.hostname or "127.0.0.1",
+            "port": parsed.port or 3306,
+            "user": parsed.username or "root",
+            "password": parsed.password or "",
+            "db": parsed.path.lstrip("/") or "railway",
+        }
+    host = os.getenv("MYSQLHOST") or os.getenv("MYSQL_HOST", "127.0.0.1")
+    port = int(os.getenv("MYSQLPORT") or os.getenv("MYSQL_PORT", "3306"))
+    user = os.getenv("MYSQLUSER") or os.getenv("MYSQL_USER", "root")
+    password = os.getenv("MYSQLPASSWORD") or os.getenv("MYSQL_PASSWORD", "")
+    db = os.getenv("MYSQLDATABASE") or os.getenv("MYSQL_DATABASE", "railway")
+    return {"host": host, "port": port, "user": user, "password": password, "db": db}
 
 
 _SCHEMA = [
@@ -88,13 +96,9 @@ class Database:
         self._pool: aiomysql.Pool | None = None
 
     async def connect(self):
-        mysql_url = os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL")
-        if not mysql_url:
-            raise RuntimeError(
-                "MYSQL_URL or DATABASE_URL environment variable is required"
-            )
+        conn_kwargs = _get_mysql_config()
+        logger.info("Connecting to MySQL at %s:%s/%s", conn_kwargs["host"], conn_kwargs["port"], conn_kwargs["db"])
 
-        conn_kwargs = _parse_mysql_url(mysql_url)
         self._pool = await aiomysql.create_pool(
             minsize=1,
             maxsize=5,
