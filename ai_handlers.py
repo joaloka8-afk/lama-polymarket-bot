@@ -3,7 +3,6 @@
 import logging
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from ai_assistant import GrokAssistant
@@ -30,29 +29,24 @@ from algo_handlers import (
 logger = logging.getLogger(__name__)
 
 
-# ═════════════════════════════════════════════════════════════
-# AI Message Handler
-# ═════════════════════════════════════════════════════════════
-
 async def ai_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle natural language messages using Grok AI."""
     bd = context.bot_data
     db = bd["db"]
     grok: GrokAssistant = bd.get("grok")
-    
+
     if not grok:
         await update.message.reply_text(
-            "❌ AI assistant not configured. Set XAI_API_KEY in your .env file."
+            "AI is not set up right now. Try using commands instead, like /start"
         )
         return
-    
+
     uid = update.effective_user.id
     message_text = update.message.text
-    
-    # Get user context
+
     user = await db.get_user(uid)
     leaders = await db.get_leaders(uid) if user else []
-    
+
     user_context = {
         "has_wallet": user is not None,
         "has_proxy": user and user["proxy_wallet_address"] is not None,
@@ -60,34 +54,29 @@ async def ai_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "is_paused": user and user["is_paused"] == 1,
         "leader_count": len(leaders),
     }
-    
-    # Send typing indicator
+
     await update.message.chat.send_action("typing")
-    
-    # Load conversation history from database
+
     chat_history = await db.get_chat_history(uid, limit=20)
-    
-    # Understand intent using Grok (with memory)
+
     try:
         result = await grok.understand_intent(message_text, user_context, chat_history)
-    except Exception as exc:
+    except Exception:
         logger.exception("Grok intent understanding failed")
         await update.message.reply_text(
             "I'm having trouble right now. Try again in a sec?"
         )
         return
-    
+
     intent = result.get("intent", "chat")
     params = result.get("params", {})
     response = result.get("response", "")
     requires_confirmation = result.get("requires_confirmation", False)
-    
-    # Save user message and AI response to history
+
     await db.save_chat_message(uid, "user", message_text)
     if response:
         await db.save_chat_message(uid, "assistant", response)
-    
-    # Route to appropriate handler
+
     if intent == "trade" and requires_confirmation:
         await handle_trade_intent(update, context, params, response)
     elif intent == "create_wallet":
@@ -127,13 +116,8 @@ async def ai_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.args = [strategy]
         await set_strategy_cmd(update, context)
     else:
-        # Just chat
-        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(response)
 
-
-# ═════════════════════════════════════════════════════════════
-# Trade Intent Handler (with confirmation)
-# ═════════════════════════════════════════════════════════════
 
 async def handle_trade_intent(
     update: Update, context: ContextTypes.DEFAULT_TYPE, params: dict, ai_response: str
@@ -143,111 +127,90 @@ async def handle_trade_intent(
     db = bd["db"]
     grok: GrokAssistant = bd.get("grok")
     uid = update.effective_user.id
-    
-    # Check if user is set up
+
     user = await db.get_user(uid)
     if not user or not user["proxy_wallet_address"] or not user["encrypted_api_key"]:
         await update.message.reply_text(
-            "❌ You need to complete setup first:\n"
-            "/create\\_wallet → /setup\\_proxy → /deposit → /connect",
-            parse_mode=ParseMode.MARKDOWN,
+            "You need to finish setup first.\n"
+            "Do these in order: /create_wallet /setup_proxy /deposit /connect"
         )
         return
-    
+
     if user["is_paused"]:
         await update.message.reply_text(
-            "⏸️ Your account is paused. Use /resume to enable trading."
+            "Trading is paused right now. Type /resume to turn it back on."
         )
         return
-    
-    # Generate trade summary
+
     summary = await grok.generate_trade_summary(params)
-    
-    # Store trade params in user_data for callback
+
     context.user_data["pending_trade"] = params
-    
-    # Create confirmation buttons
+
     keyboard = [
         [
-            InlineKeyboardButton("✅ Confirm", callback_data="trade_confirm"),
-            InlineKeyboardButton("❌ Cancel", callback_data="trade_cancel"),
+            InlineKeyboardButton("Yes, do it", callback_data="trade_confirm"),
+            InlineKeyboardButton("No, cancel", callback_data="trade_cancel"),
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        summary,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=reply_markup,
-    )
 
+    await update.message.reply_text(summary, reply_markup=reply_markup)
 
-# ═════════════════════════════════════════════════════════════
-# Trade Confirmation Callbacks
-# ═════════════════════════════════════════════════════════════
 
 async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle trade confirmation button press."""
     query = update.callback_query
     await query.answer()
-    
+
     bd = context.bot_data
     db = bd["db"]
     wm = bd["wallet_mgr"]
     api = bd["api"]
-    
+
     uid = query.from_user.id
     params = context.user_data.get("pending_trade")
-    
+
     if not params:
-        await query.edit_message_text("❌ Trade expired or not found.")
+        await query.edit_message_text("That trade expired. Try again.")
         return
-    
-    # Get user
+
     user = await db.get_user(uid)
     if not user:
-        await query.edit_message_text("❌ User not found.")
+        await query.edit_message_text("Something went wrong. Try /start")
         return
-    
-    await query.edit_message_text("⏳ Placing order...")
-    
-    # Execute the trade
+
+    await query.edit_message_text("Placing your order...")
+
     try:
-        # Decrypt credentials
         pk = wm.decrypt(user["encrypted_private_key"])
         api_key = wm.decrypt(user["encrypted_api_key"])
         api_secret = wm.decrypt(user["encrypted_api_secret"])
         passphrase = wm.decrypt(user["encrypted_passphrase"])
-        
-        # TODO: Resolve market description to token_id
-        # For now, user needs to provide token_id directly or we need market search
+
         token_id = params.get("token_id") or params.get("market")
-        
+
         if not token_id or not token_id.startswith("0x"):
             await query.edit_message_text(
-                "❌ Could not resolve market. Please provide the token ID directly.\n"
-                "Example: \"buy 10 on token 0x123...\""
+                "I couldn't figure out which market you mean. "
+                "Try giving me the token ID directly, like:\n"
+                "buy 10 on token 0x1234..."
             )
             return
-        
+
         side = params.get("side", "BUY")
         amount = float(params.get("amount", 0))
-        
-        # Get current price from order book
+
         book = await api.get_order_book(token_id)
         if side == "BUY":
-            # Use best ask + slippage
             best_ask = float(book.get("asks", [[0.5]])[0][0])
             price = min(best_ask * 1.02, 0.99)
         else:
-            # Use best bid - slippage
             best_bid = float(book.get("bids", [[0.5]])[0][0])
             price = max(best_bid * 0.98, 0.01)
-        
+
         price = round(price, 4)
         size = round(amount / price, 2)
-        
-        # Place order
+
         result = await api.place_order(
             private_key=pk,
             proxy_address=user["proxy_wallet_address"],
@@ -259,10 +222,9 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
             price=price,
             size=size,
         )
-        
+
         order_id = str(result.get("orderID") or result.get("order_id") or "")
-        
-        # Log it
+
         await db.log_trade(
             telegram_user_id=uid,
             owner_eoa=user["owner_address"],
@@ -275,23 +237,23 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
             order_id=order_id,
             status="placed",
         )
-        
+
         await query.edit_message_text(
-            f"✅ **Order placed!**\n\n"
+            f"Order placed!\n"
+            f"\n"
             f"{side} {params.get('outcome', '')}\n"
-            f"Size: {size:.2f} @ ${price:.4f}\n"
-            f"Order ID: `{order_id}`",
-            parse_mode=ParseMode.MARKDOWN,
+            f"Amount: {size:.2f} at ${price:.4f}\n"
+            f"Order ID: {order_id}"
         )
-        
+
         logger.info("Manual trade placed by user %d: %s", uid, order_id)
-        
+
     except Exception as exc:
         logger.exception("Manual trade failed for user %d", uid)
         await query.edit_message_text(
-            f"❌ Trade failed: {str(exc)[:200]}"
+            f"Trade failed: {str(exc)[:200]}"
         )
-        
+
         await db.log_trade(
             telegram_user_id=uid,
             owner_eoa=user["owner_address"],
@@ -306,7 +268,6 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
             error=str(exc)[:500],
         )
     finally:
-        # Clear pending trade
         context.user_data.pop("pending_trade", None)
 
 
@@ -314,6 +275,6 @@ async def trade_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TY
     """Handle trade cancellation button press."""
     query = update.callback_query
     await query.answer()
-    
+
     context.user_data.pop("pending_trade", None)
-    await query.edit_message_text("❌ Trade cancelled.")
+    await query.edit_message_text("Trade cancelled.")

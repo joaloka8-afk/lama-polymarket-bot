@@ -119,17 +119,18 @@ If asked who you are, just say your name is Lama. Don't make it a whole speech.
             }
 
     async def generate_trade_summary(self, trade_params: dict) -> str:
-        """Generate a human-readable trade summary for confirmation."""
+        """Generate a simple trade summary for confirmation."""
         side = trade_params.get("side", "BUY")
         outcome = trade_params.get("outcome", "")
         amount = trade_params.get("amount", 0)
         market = trade_params.get("market", "unknown market")
-        
-        emoji = "📈" if side == "BUY" else "📉"
+
         return (
-            f"{emoji} **Trade Confirmation**\n\n"
+            f"Just to make sure, here's what I'll do:\n"
+            f"\n"
             f"Market: {market}\n"
-            f"Side: {side} {outcome}\n"
-            f"Amount: ${amount:.2f}\n\n"
-            f"React with ✅ to confirm or ❌ to cancel"
+            f"Bet on: {side} {outcome}\n"
+            f"Amount: ${amount:.2f}\n"
+            f"\n"
+            f"Want me to go ahead?"
         )
