@@ -50,12 +50,17 @@ from wallet_manager import WalletManager
 
 # ── logging ──────────────────────────────────────────────────
 
+_data_dir = os.getenv("DATA_DIR", ".")
+os.makedirs(_data_dir, exist_ok=True)
+
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     level=logging.INFO,
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.FileHandler(
+            os.path.join(_data_dir, "bot.log"), encoding="utf-8"
+        ),
     ],
 )
 logger = logging.getLogger(__name__)

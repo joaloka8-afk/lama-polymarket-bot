@@ -8,7 +8,8 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-DB_FILE = os.getenv("DATABASE_PATH", "polybot.db")
+_data_dir = os.getenv("DATA_DIR", ".")
+DB_FILE = os.getenv("DATABASE_PATH", os.path.join(_data_dir, "polybot.db"))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (

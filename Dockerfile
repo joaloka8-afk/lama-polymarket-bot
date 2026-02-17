@@ -24,6 +24,7 @@ RUN mkdir -p /app/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV DATA_DIR=/app/data
 
 # Run the bot
 CMD ["python", "main.py"]
