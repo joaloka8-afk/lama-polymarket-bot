@@ -234,6 +234,23 @@ class AlgoEngine:
                 error=str(exc)[:500],
             )
 
+            # Notify user about failure
+            if self.bot:
+                try:
+                    await self.bot.send_message(
+                        chat_id=uid,
+                        text=(
+                            f"❌ AUTO TRADE FAILED\n"
+                            f"\n"
+                            f"📊 {signal['side']} {signal['outcome']}\n"
+                            f"💡 Reason: {signal.get('reason', 'unknown')}\n"
+                            f"\n"
+                            f"Error: {str(exc)[:200]}"
+                        ),
+                    )
+                except Exception:
+                    logger.debug("Could not notify user %d", uid)
+
     async def _notify(
         self,
         telegram_id: int,
@@ -248,13 +265,32 @@ class AlgoEngine:
         if not self.bot:
             return
 
-        emoji = "🤖📈" if side == "BUY" else "🤖📉"
+        cost = size * price
+        side_emoji = "📈" if side == "BUY" else "📉"
+
+        # Get PNL stats for the card
+        pnl = await self.db.get_pnl_stats(telegram_id)
+        pnl_emoji = "🟢" if pnl["realized_pnl"] >= 0 else "🔴"
+        today_emoji = "🟢" if pnl["today_pnl"] >= 0 else "🔴"
+
         text = (
-            f"{emoji} **Algo Trade Executed**\n\n"
-            f"{side} {outcome}\n"
-            f"Size: {size:.2f} @ ${price:.4f}\n"
-            f"Confidence: {confidence*100:.0f}%\n"
-            f"Reason: {reason}"
+            f"🤖 AUTO TRADE PLACED\n"
+            f"\n"
+            f"{side_emoji} {side} {outcome}\n"
+            f"💰 ${cost:.2f} ({size:.2f} shares at ${price:.4f})\n"
+            f"🎯 Confidence: {confidence*100:.0f}%\n"
+            f"💡 Reason: {reason}\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 YOUR PNL CARD\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"\n"
+            f"{today_emoji} Today: ${pnl['today_pnl']:+.2f} ({pnl['today_trades']} trades)\n"
+            f"{pnl_emoji} All time: ${pnl['realized_pnl']:+.2f} ({pnl['total_trades']} trades)\n"
+            f"📈 Open positions: {pnl['open_positions']}\n"
+            f"💵 Total bought: ${pnl['total_bought']:.2f}\n"
+            f"💵 Total sold: ${pnl['total_sold']:.2f}\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
         )
 
         try:

@@ -336,3 +336,88 @@ class Database:
         )
         rows = await cur.fetchall()
         return [{"role": r["role"], "message": r["message"]} for r in reversed(rows)]
+
+    # ── PNL helpers ──────────────────────────────────────────
+
+    async def get_pnl_stats(self, telegram_id: int) -> dict:
+        """Calculate PNL stats for a user from their trade history."""
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        # Total trades
+        cur = await self._db.execute(
+            "SELECT COUNT(*) FROM trade_log WHERE telegram_user_id = ? AND status = 'placed'",
+            (telegram_id,),
+        )
+        row = await cur.fetchone()
+        total_trades = row[0] if row else 0
+
+        # Today's trades
+        cur = await self._db.execute(
+            "SELECT COUNT(*) FROM trade_log "
+            "WHERE telegram_user_id = ? AND status = 'placed' AND timestamp_utc LIKE ?",
+            (telegram_id, f"{today}%"),
+        )
+        row = await cur.fetchone()
+        today_trades = row[0] if row else 0
+
+        # Total spent (buys)
+        cur = await self._db.execute(
+            "SELECT COALESCE(SUM(size * price), 0) FROM trade_log "
+            "WHERE telegram_user_id = ? AND status = 'placed' AND outcome_side LIKE 'BUY%'",
+            (telegram_id,),
+        )
+        row = await cur.fetchone()
+        total_bought = float(row[0]) if row else 0.0
+
+        # Total received (sells)
+        cur = await self._db.execute(
+            "SELECT COALESCE(SUM(size * price), 0) FROM trade_log "
+            "WHERE telegram_user_id = ? AND status = 'placed' AND outcome_side LIKE 'SELL%'",
+            (telegram_id,),
+        )
+        row = await cur.fetchone()
+        total_sold = float(row[0]) if row else 0.0
+
+        # Today spent
+        cur = await self._db.execute(
+            "SELECT COALESCE(SUM(size * price), 0) FROM trade_log "
+            "WHERE telegram_user_id = ? AND status = 'placed' "
+            "AND outcome_side LIKE 'BUY%' AND timestamp_utc LIKE ?",
+            (telegram_id, f"{today}%"),
+        )
+        row = await cur.fetchone()
+        today_bought = float(row[0]) if row else 0.0
+
+        # Today received
+        cur = await self._db.execute(
+            "SELECT COALESCE(SUM(size * price), 0) FROM trade_log "
+            "WHERE telegram_user_id = ? AND status = 'placed' "
+            "AND outcome_side LIKE 'SELL%' AND timestamp_utc LIKE ?",
+            (telegram_id, f"{today}%"),
+        )
+        row = await cur.fetchone()
+        today_sold = float(row[0]) if row else 0.0
+
+        # Open positions count
+        open_pos = await self.count_open_positions(telegram_id)
+
+        # Failed trades
+        cur = await self._db.execute(
+            "SELECT COUNT(*) FROM trade_log WHERE telegram_user_id = ? AND status = 'error'",
+            (telegram_id,),
+        )
+        row = await cur.fetchone()
+        failed_trades = row[0] if row else 0
+
+        return {
+            "total_trades": total_trades,
+            "today_trades": today_trades,
+            "total_bought": total_bought,
+            "total_sold": total_sold,
+            "today_bought": today_bought,
+            "today_sold": today_sold,
+            "realized_pnl": total_sold - total_bought,
+            "today_pnl": today_sold - today_bought,
+            "open_positions": open_pos,
+            "failed_trades": failed_trades,
+        }

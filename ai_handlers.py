@@ -238,12 +238,29 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
             status="placed",
         )
 
+        # Get PNL stats for the card
+        pnl = await db.get_pnl_stats(uid)
+        pnl_emoji = "🟢" if pnl["realized_pnl"] >= 0 else "🔴"
+        today_emoji = "🟢" if pnl["today_pnl"] >= 0 else "🔴"
+        cost = size * price
+
         await query.edit_message_text(
             f"✅ Order placed!\n"
             f"\n"
-            f"{side} {params.get('outcome', '')}\n"
-            f"Amount: {size:.2f} at ${price:.4f}\n"
-            f"Order ID: {order_id}"
+            f"📊 {side} {params.get('outcome', '')}\n"
+            f"💰 ${cost:.2f} ({size:.2f} shares at ${price:.4f})\n"
+            f"🆔 Order: {order_id}\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 YOUR PNL CARD\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"\n"
+            f"{today_emoji} Today: ${pnl['today_pnl']:+.2f} ({pnl['today_trades']} trades)\n"
+            f"{pnl_emoji} All time: ${pnl['realized_pnl']:+.2f} ({pnl['total_trades']} trades)\n"
+            f"📈 Open positions: {pnl['open_positions']}\n"
+            f"💵 Total bought: ${pnl['total_bought']:.2f}\n"
+            f"💵 Total sold: ${pnl['total_sold']:.2f}\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
         )
 
         logger.info("Manual trade placed by user %d: %s", uid, order_id)

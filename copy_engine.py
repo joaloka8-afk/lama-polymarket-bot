@@ -256,15 +256,39 @@ class CopyEngine:
     ):
         if not self.bot:
             return
+
+        cost = size * price
+
         if status == "placed":
+            # Get PNL stats for the card
+            pnl = await self.db.get_pnl_stats(telegram_id)
+            pnl_emoji = "🟢" if pnl["realized_pnl"] >= 0 else "🔴"
+            today_emoji = "🟢" if pnl["today_pnl"] >= 0 else "🔴"
+
             text = (
-                f"Copy-trade executed\n"
-                f"{outcome_side}  ${size:.2f} @ {price:.4f}"
+                f"👥 COPY TRADE PLACED\n"
+                f"\n"
+                f"📊 {outcome_side}\n"
+                f"💰 ${cost:.2f} ({size:.2f} shares at ${price:.4f})\n"
+                f"\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"📋 YOUR PNL CARD\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n"
+                f"{today_emoji} Today: ${pnl['today_pnl']:+.2f} ({pnl['today_trades']} trades)\n"
+                f"{pnl_emoji} All time: ${pnl['realized_pnl']:+.2f} ({pnl['total_trades']} trades)\n"
+                f"📈 Open positions: {pnl['open_positions']}\n"
+                f"💵 Total bought: ${pnl['total_bought']:.2f}\n"
+                f"💵 Total sold: ${pnl['total_sold']:.2f}\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
             )
         else:
             text = (
-                f"Copy-trade FAILED\n"
-                f"{outcome_side}  ${size:.2f} @ {price:.4f}\n"
+                f"❌ COPY TRADE FAILED\n"
+                f"\n"
+                f"📊 {outcome_side}\n"
+                f"💰 ${cost:.2f} ({size:.2f} shares at ${price:.4f})\n"
+                f"\n"
                 f"Error: {(error or 'unknown')[:200]}"
             )
         try:
