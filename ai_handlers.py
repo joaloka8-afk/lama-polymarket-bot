@@ -37,7 +37,7 @@ async def ai_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if not grok:
         await update.message.reply_text(
-            "AI is not set up right now. Try using commands instead, like /start"
+            "⚠️ AI is not set up right now. Try using commands instead, like /start"
         )
         return
 
@@ -131,14 +131,14 @@ async def handle_trade_intent(
     user = await db.get_user(uid)
     if not user or not user["proxy_wallet_address"] or not user["encrypted_api_key"]:
         await update.message.reply_text(
-            "You need to finish setup first.\n"
+            "⚠️ You need to finish setup first.\n"
             "Do these in order: /create_wallet /setup_proxy /deposit /connect"
         )
         return
 
     if user["is_paused"]:
         await update.message.reply_text(
-            "Trading is paused right now. Type /resume to turn it back on."
+            "⏸️ Trading is paused right now. Type /resume to turn it back on."
         )
         return
 
@@ -171,15 +171,15 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     params = context.user_data.get("pending_trade")
 
     if not params:
-        await query.edit_message_text("That trade expired. Try again.")
+        await query.edit_message_text("⏰ That trade expired. Try again.")
         return
 
     user = await db.get_user(uid)
     if not user:
-        await query.edit_message_text("Something went wrong. Try /start")
+        await query.edit_message_text("❌ Something went wrong. Try /start")
         return
 
-    await query.edit_message_text("Placing your order...")
+    await query.edit_message_text("⏳ Placing your order...")
 
     try:
         pk = wm.decrypt(user["encrypted_private_key"])
@@ -239,7 +239,7 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
         )
 
         await query.edit_message_text(
-            f"Order placed!\n"
+            f"✅ Order placed!\n"
             f"\n"
             f"{side} {params.get('outcome', '')}\n"
             f"Amount: {size:.2f} at ${price:.4f}\n"
@@ -251,7 +251,7 @@ async def trade_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as exc:
         logger.exception("Manual trade failed for user %d", uid)
         await query.edit_message_text(
-            f"Trade failed: {str(exc)[:200]}"
+            f"❌ Trade failed: {str(exc)[:200]}"
         )
 
         await db.log_trade(
@@ -277,4 +277,4 @@ async def trade_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     context.user_data.pop("pending_trade", None)
-    await query.edit_message_text("Trade cancelled.")
+    await query.edit_message_text("👍 Trade cancelled.")

@@ -126,11 +126,11 @@ If asked who you are, just say your name is Lama. Don't make it a whole speech.
         market = trade_params.get("market", "unknown market")
 
         return (
-            f"Just to make sure, here's what I'll do:\n"
+            f"📋 Just to make sure, here's what I'll do:\n"
             f"\n"
-            f"Market: {market}\n"
-            f"Bet on: {side} {outcome}\n"
-            f"Amount: ${amount:.2f}\n"
+            f"🏷️ Market: {market}\n"
+            f"📊 Bet on: {side} {outcome}\n"
+            f"💰 Amount: ${amount:.2f}\n"
             f"\n"
             f"Want me to go ahead?"
         )

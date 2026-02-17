@@ -24,14 +24,14 @@ async def enable_algo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await db.get_user(uid)
     if not user or not user["encrypted_api_key"]:
         await update.message.reply_text(
-            "You need to finish setup first.\n"
+            "⚠️ You need to finish setup first.\n"
             "Do these in order: /create_wallet /setup_proxy /deposit /connect"
         )
         return
 
     if user["algo_trading_enabled"]:
         await update.message.reply_text(
-            f"Auto trading is already on.\n"
+            f"✅ Auto trading is already on.\n"
             f"Strategy: {user['algo_strategy']}\n"
             f"Confidence: {user['algo_min_confidence']*100:.0f}%"
         )
@@ -40,7 +40,7 @@ async def enable_algo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db.update_user(uid, algo_trading_enabled=1)
 
     await update.message.reply_text(
-        f"Auto trading is on!\n"
+        f"🤖 Auto trading is on!\n"
         f"\n"
         f"Strategy: {user['algo_strategy'] or 'momentum'}\n"
         f"Confidence: {user['algo_min_confidence']*100:.0f}%\n"
@@ -59,17 +59,17 @@ async def disable_algo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = await db.get_user(uid)
     if not user:
-        await update.message.reply_text("You don't have an account yet. Type /create_wallet")
+        await update.message.reply_text("⚠️ You don't have an account yet. Type /create_wallet")
         return
 
     if not user["algo_trading_enabled"]:
-        await update.message.reply_text("Auto trading is already off.")
+        await update.message.reply_text("ℹ️ Auto trading is already off.")
         return
 
     await db.update_user(uid, algo_trading_enabled=0)
 
     await update.message.reply_text(
-        "Auto trading is off.\n"
+        "⏹️ Auto trading is off.\n"
         "Type /enable_algo to turn it back on."
     )
     logger.info("User %d disabled algo trading", uid)
@@ -83,23 +83,23 @@ async def algo_status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = await db.get_user(uid)
     if not user:
-        await update.message.reply_text("You don't have an account yet. Type /create_wallet")
+        await update.message.reply_text("⚠️ You don't have an account yet. Type /create_wallet")
         return
 
-    enabled = "on" if user["algo_trading_enabled"] else "off"
+    enabled = "🟢 on" if user["algo_trading_enabled"] else "🔴 off"
     strategy = user["algo_strategy"] or "momentum"
     min_conf = float(user["algo_min_confidence"] or 0.70)
 
     strategies_list = ", ".join(list_strategies())
 
     text = (
-        f"AUTO TRADING\n"
+        f"🤖 AUTO TRADING\n"
         f"\n"
         f"Status: {enabled}\n"
         f"Strategy: {strategy}\n"
         f"Confidence needed: {min_conf*100:.0f}%\n"
         f"\n"
-        f"Available strategies: {strategies_list}\n"
+        f"📋 Available strategies: {strategies_list}\n"
         f"\n"
         f"To change, type /set_strategy followed by the name."
     )
@@ -115,7 +115,7 @@ async def set_strategy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = await db.get_user(uid)
     if not user:
-        await update.message.reply_text("You don't have an account yet. Type /create_wallet")
+        await update.message.reply_text("⚠️ You don't have an account yet. Type /create_wallet")
         return
 
     if not context.args:
@@ -123,23 +123,23 @@ async def set_strategy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"Type /set_strategy followed by the name.\n"
             f"\n"
-            f"Available: {strategies}"
+            f"📋 Available: {strategies}"
         )
         return
 
     strategy_name = context.args[0].strip().lower()
     if strategy_name not in list_strategies():
         await update.message.reply_text(
-            f"I don't know that strategy.\n"
+            f"❌ I don't know that strategy.\n"
             f"\n"
-            f"Available: {', '.join(list_strategies())}"
+            f"📋 Available: {', '.join(list_strategies())}"
         )
         return
 
     await db.update_user(uid, algo_strategy=strategy_name)
 
     await update.message.reply_text(
-        f"Strategy changed to {strategy_name}.\n"
+        f"✅ Strategy changed to {strategy_name}.\n"
         f"I'll use this from now on."
     )
     logger.info("User %d changed strategy to %s", uid, strategy_name)
