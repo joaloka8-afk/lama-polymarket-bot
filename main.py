@@ -110,6 +110,28 @@ async def post_init(application: Application):
 
     await engine.start()
     await algo_engine.start()
+
+    # Register command menu so Telegram shows commands when user types /
+    from telegram import BotCommand
+    await application.bot.set_my_commands([
+        BotCommand("start", "Show welcome and all commands"),
+        BotCommand("create_wallet", "Make a new wallet"),
+        BotCommand("setup_proxy", "Set up your trading wallet"),
+        BotCommand("deposit", "See where to send money"),
+        BotCommand("connect", "Turn on trading"),
+        BotCommand("follow", "Copy someone's trades"),
+        BotCommand("unfollow", "Stop copying someone"),
+        BotCommand("leaders", "See who you're copying"),
+        BotCommand("enable_algo", "Turn on auto trading"),
+        BotCommand("disable_algo", "Turn off auto trading"),
+        BotCommand("algo_status", "Check auto trading status"),
+        BotCommand("set_strategy", "Pick a trading style"),
+        BotCommand("pause", "Pause all trading"),
+        BotCommand("resume", "Resume all trading"),
+        BotCommand("status", "See your account info"),
+        BotCommand("history", "See your past trades"),
+    ])
+
     logger.info("Bot fully initialised – copy engine + algo engine running")
 
 
